@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Tube Map</title>
+    <meta name="author" content="">
+    <meta name="description" content="">
+    <style>
+        svg.camera > rect {
+            fill-opacity: 0;
+            stroke-width: 1px;
+        }
+
+        svg.camera > rect.selected {
+            stroke-width: 3px;
+        }
+
+    </style>
+    <script>
+        function _(ident){
+            return document.getElementById(ident);
+        }
+
+        function _uuid(){
+            var d = Date.now();
+            if (typeof performance !== 'undefined' && typeof performance.now === 'function'){
+                d += performance.now();
+            }
+
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c){
+                var r = (d + Math.random() * 16) % 16 | 0;
+                d = Math.floor(d / 16);
+                return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+            });
+        }
+
+        // Camera class
+        function Camera(config){
+            return {
+                container: _(config.container_id),
+                width: config.width || 320,
+                height: config.height || 240,
+                image_source: null,
+                detected_objects: null,
+                process_message: function (src_or_data_uri, detected_objects){
+                    const self = this;
+
+                    // setup image_source
+                    self.image_source = new Image();
+                    self.image_source.addEventListener('load', function (){
+                        self.clean_data();
+                        self.render_data();
+                    });
+                    self.image_source.setAttribute('src', src_or_data_uri);
+
+                    // setup detected_objects
+                    self.detected_objects = detected_objects;
+                },
+                clean_data: function (){
+                    const self = this;
+
+                    Array.from(self.container.children).forEach(function (el){ el.remove(); });
+                },
+                render_data: function (){
+                    const self = this;
+
+                    // calculate ratio
+                    let ratio_max, ratio_x, ratio_y;
+                    ratio_x = self.image_source.width / self.width;
+                    ratio_y = self.image_source.height / self.height;
+                    ratio_max = (ratio_x > ratio_y)?ratio_x:ratio_y;
+
+                    // create and append svg
+                    let svg;
+                    svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.setAttributeNS(null, 'width', self.width);
+                    svg.setAttributeNS(null, 'height', self.height);
+                    svg.setAttributeNS(null, 'class', 'camera');
+                    svg.setAttributeNS(null, 'style', 'background: #808080; border-radius: 30px;');
+                    self.container.append(svg);
+
+                    // create and append background image
+                    let background;
+                    background = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+                    background.setAttributeNS('http://www.w3.org/1999/xlink', 'href', self.image_source.getAttribute('src'));
+                    background.setAttributeNS(null, 'x', '0');
+                    background.setAttributeNS(null, 'y', '0');
+                    background.setAttributeNS(null, 'width', String(self.image_source.width / ratio_max));
+                    background.setAttributeNS(null, 'height', String(self.image_source.height / ratio_max));
+                    background.setAttributeNS(null, 'visibility', 'visible');
+                    svg.append(background);
+
+                    // create and append detected objects
+                    self.detected_objects.forEach(function (element, index){
+                        let base = parseInt(Math.random() * 10);
+                        let red = parseInt(Math.random() * 255 - index * base);
+                        let green = parseInt(Math.random() * 255 - index * base);
+                        let blue = parseInt(Math.random() * 255 - index * base);
+
+                        // setup the rectangle
+                        let rect_temp;
+                        rect_temp = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                        rect_temp.setAttributeNS(null, 'x', element['bbox'][0]);
+                        rect_temp.setAttributeNS(null, 'y', element['bbox'][1]);
+                        rect_temp.setAttributeNS(null, 'width', element['bbox'][2]);
+                        rect_temp.setAttributeNS(null, 'height', element['bbox'][3]);
+                        rect_temp.setAttributeNS(null, 'stroke', 'rgb(' + red + ',' + green + ',' + blue + ')');
+                        rect_temp.setAttributeNS(null, 'data-id', element.target_person_uuid);
+
+                        svg.append(rect_temp);
+                    });
+
+                    // make detected objects selectable
+                    svg.querySelectorAll('rect').forEach(function (element){
+                        element.addEventListener('mouseover', function (){
+                            this.setAttributeNS(null, 'class', 'selected');
+                        });
+                        element.addEventListener('mouseleave', function (){
+                            this.setAttributeNS(null, 'class', '');
+                        });
+                        element.addEventListener('click', function (){
+                            console.log('clicked on ' + this.getAttributeNS(null, 'data-id'));
+                        });
+                    });
+                }
+            };
+        }
+
+        // main function
+        let cam01, cam02, detected_persons = [];
+        window.addEventListener('load', function (){
+            // prepare mocked persons
+            for (let i = 0, max = 10;i < max;i++){
+                let base = parseInt(Math.random() * 100);
+
+                let tmp = {};
+                tmp['target_person_uuid'] = _uuid();
+                tmp['bbox'] = [
+                    base * Math.random() * 10,
+                    base * Math.random() * 10,
+                    base * Math.random() * 10,
+                    base * Math.random() * 10
+                ];
+
+                detected_persons.push(tmp);
+            }
+
+            // create camera
+            cam01 = new Camera({container_id: 'cam01'});
+            cam01.process_message('picture1.jpg', detected_persons);
+
+            cam02 = new Camera({container_id: 'cam02', width: 800, height: 600});
+            cam02.process_message('picture1.jpg', detected_persons);
+        });
+    </script>
+</head>
+<body>
+    <div id="cam01"></div>
+    <div id="cam02"></div>
+</body>
+</html>
